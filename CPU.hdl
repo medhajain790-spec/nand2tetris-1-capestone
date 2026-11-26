@@ -1,0 +1,56 @@
+// CPU.hdl (Capstone Part A)
+// instruction[15] = 0 -> A-instruction, 1 -> C-instruction
+
+CHIP CPU {
+
+    IN  inM[16], instruction[16], reset;
+    OUT outM[16], writeM, addressM[15], pc[15];
+
+    PARTS:
+
+    // ---------- A instruction ya ALU output ----------
+    Not(in=instruction[15], out=isA);
+
+    // A-instruction ho to instruction, C-instruction ho to ALU output
+    Mux16(a=instruction, b=aluOut, sel=instruction[15], out=aIn);
+
+    // A register tab load hoga jab A-instruction ho ya dest mein A ho
+    And(a=instruction[15], b=instruction[5], out=cLoadA);
+    Or(a=isA, b=cLoadA, out=loadA);
+
+    ARegister(in=aIn, load=loadA, out=aOut, out[0..14]=addressM);
+
+    // ---------- ALU ke inputs ----------
+    // a-bit (instruction[12]) decide karta hai A ya M
+    Mux16(a=aOut, b=inM, sel=instruction[12], out=aluY);
+
+    // D register
+    And(a=instruction[15], b=instruction[4], out=loadD);
+    DRegister(in=aluOut, load=loadD, out=dOut);
+
+    ALU(x=dOut, y=aluY,
+        zx=instruction[11], nx=instruction[10],
+        zy=instruction[9],  ny=instruction[8],
+        f=instruction[7],   no=instruction[6],
+        out=aluOut, out=outM, zr=zr, ng=ng);
+
+    // ---------- Memory write ----------
+    And(a=instruction[15], b=instruction[3], out=writeM);
+
+    // ---------- Jump logic ----------
+    Or(a=zr, b=ng, out=zrOrNg);
+    Not(in=zrOrNg, out=pos);
+
+    And(a=instruction[2], b=ng,  out=jLT);
+    And(a=instruction[1], b=zr,  out=jEQ);
+    And(a=instruction[0], b=pos, out=jGT);
+
+    Or(a=jLT, b=jEQ, out=jTemp);
+    Or(a=jTemp, b=jGT, out=jAny);
+
+    // jump sirf C-instruction mein hota hai
+    And(a=instruction[15], b=jAny, out=doJump);
+
+    // ---------- Program Counter ----------
+    PC(in=aOut, load=doJump, inc=true, reset=reset, out[0..14]=pc);
+}
